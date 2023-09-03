@@ -1,0 +1,18 @@
+from setuptools import setup
+
+setup(
+    name='certbot-dns-opteamax',
+    version = '1.0.0',
+    author='Peter Lieven',
+    author_email='pl@opteamax.de',
+    py_modules=['certbot_dns_opteamax'],
+    url     = 'https://github.com/plieven/certbot-dns-opteamax',
+    install_requires=[
+        'certbot',
+    ],
+    entry_points={
+        'certbot.plugins': [
+            'dns-opteamax = certbot_dns_opteamax:Authenticator',
+        ],
+    },
+)
