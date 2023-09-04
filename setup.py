@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='certbot-dns-opteamax',
-    version = '1.0.0',
+    version = '1.0.1',
     author='Peter Lieven',
     author_email='pl@opteamax.de',
     py_modules=['certbot_dns_opteamax'],

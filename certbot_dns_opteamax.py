@@ -1,4 +1,4 @@
-"""Certbot Authenticator Plugin for Opteammax DNS.
+"""Certbot Authenticator Plugin for Opteamax DNS.
 
 @author:     Peter Lieven <pl@opteamax.de>
 @license:    GPL
@@ -16,15 +16,16 @@ from urllib.request import urlopen, Request
 logger = logging.getLogger(__name__)
 
 OXAPI_URL = "https://www.opteamax.de/oxapi/dns/"
+REQUEST_TIMEOUT_S = 60
 
 class Authenticator(dns_common.DNSAuthenticator):
-    """DNS Authenticator for opteamax
+    """DNS Authenticator for Opteamax DNS
 
-    This Authenticator uses the opteamax API to fulfill a dns-01 challenge.
+    This Authenticator uses the Opteamax OXAPI API to fulfill a dns-01 challenge.
     """
 
     description = ('Obtain certificates using a DNS TXT record (if you are '
-                   'using opteamax for DNS).')
+                   'using Opteamax for DNS).')
     
     def __init__(self, *args, **kwargs):
         super(Authenticator, self).__init__(*args, **kwargs)
@@ -33,12 +34,12 @@ class Authenticator(dns_common.DNSAuthenticator):
     @classmethod
     def add_parser_arguments(cls, add):
         super(Authenticator, cls).add_parser_arguments(add, default_propagation_seconds = 180)
-        add('credentials', help='opteamax credentials INI file.')
+        add('credentials', help='Opteamax OXAPI credentials INI file.')
 
     def _setup_credentials(self):
         self.credentials = self._configure_credentials(
             'credentials',
-            'opteamax credentials INI file',
+            'Opteamax OXAPI credentials INI file',
             {
                 'username':      'OXAPI Username',
                 'password':      'OXAPI Password',
@@ -47,13 +48,13 @@ class Authenticator(dns_common.DNSAuthenticator):
 
     def more_info(self):
         return ('This plugin configures a DNS TXT record to respond to a '
-                'dns-01 challenge using the OXAPI.')
+                'dns-01 challenge using the Opteamax OXAPI.')
 
     def _call_oxapi(self, command, data):
         logger.debug("_call_oxapi: calling %s%s with %s" % (OXAPI_URL, command, data))
         req = Request("%s%s" % (OXAPI_URL, command))
         req.add_header('Content-Type', 'application/json')
-        res = urlopen(req, json.dumps(data).encode('utf-8'))
+        res = urlopen(req, json.dumps(data).encode('utf-8'), REQUEST_TIMEOUT_S)
         data = res.read().decode('utf-8')
         logger.debug("_call_oxapi: response -> %s\n" % data)
         jsonRes = json.loads(data)
@@ -65,7 +66,7 @@ class Authenticator(dns_common.DNSAuthenticator):
     def _build_ox_auth(self):
         return {'user': self.credentials.conf("username"), 'passwd': self.credentials.conf("password")}
 
-    def _get_ox_domid(self, domain: str) -> (int, str):
+    def _get_ox_domid(self, domain: str) -> (int, str, str):
         logger.debug("_get_ox_domid: domain %s", domain)
         params = { 'auth': self._build_ox_auth(), 'with_ptr': False }
         res = self._call_oxapi('get_zones', params)
@@ -87,21 +88,21 @@ class Authenticator(dns_common.DNSAuthenticator):
         logger.debug("_get_ox_domid: found id %d for localPart '%s' longestMatch '%s'", domid, localPart, longestMatch)
         return (domid, longestMatch, localPart)
 
-    def _rm_ox_record(self, dataid):
+    def _rm_ox_record(self, dataid) -> None:
         logger.debug("_rm_ox_record: dataid %d", dataid)
         params = { 'auth': self._build_ox_auth(), 'record': dataid }
         self._call_oxapi('delete_record', params)
 
-    def _rm_ox_txt_rr(self, domid, localPart):
+    def _rm_ox_txt_rr(self, domid, localPart) -> None:
         logger.debug("_rm_ox_txt_rr: domid %d localPart %s", domid, localPart)
         params = { 'auth': self._build_ox_auth(), 'domain_id': domid }
         res = self._call_oxapi('get_entries', params)
         for row in res['data']:
             if (row['subdomain'] == localPart):
-                logger.info('need to delete orphan RR %d subdomain %s target %s', row['dataid'], row['subdomain'], row['target'])
+                logger.debug('_rm_ox_txt_rr: need to delete orphan RR %d subdomain %s target %s', row['dataid'], row['subdomain'], row['target'])
                 self._rm_ox_record(row['dataid'])
 
-    def _add_ox_txt_rr(self, domid, fqdn, text):
+    def _add_ox_txt_rr(self, domid, fqdn, text) -> None:
         logger.debug("_add_ox_txt_rr: domid %d fqdn %s text %s", domid, fqdn, text)
         data = {
             'type' : 'TXT',
