@@ -117,7 +117,6 @@ class Authenticator(dns_common.DNSAuthenticator):
     def _perform(self, domain, validation_name, validation):
         logger.debug("_perform: domain %s validation_name %s validation %s", domain, validation_name, validation)
         (domid, longestMatch, localPart) = self._get_ox_domid(validation_name)
-        self._rm_ox_txt_rr(domid, localPart)
         self._add_ox_txt_rr(domid, validation_name, validation)
 
     def _cleanup(self, domain, validation_name, validation):
