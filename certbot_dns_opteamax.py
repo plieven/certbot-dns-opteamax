@@ -221,7 +221,7 @@ class Authenticator(dns_common.DNSAuthenticator):
                     msg += f": {ns} ({ip}) [FAIL] "
                     ret = False
         if ret:
-            logger.info(msg)
+            display_util.notify(msg)
         else:
             logger.warning(msg)
 
