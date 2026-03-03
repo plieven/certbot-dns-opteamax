@@ -7,11 +7,6 @@
 import logging
 import json
 import time
-import dns.resolver
-import dns.name
-import dns.query
-import dns.message
-import dns.exception
 
 from typing import List
 from acme import challenges
@@ -29,6 +24,18 @@ REQUEST_TIMEOUT_S = 60
 DNS_RECORD_TTL_S = 300
 VALIDATION_TIMEOUT_S = DNS_RECORD_TTL_S * 1.5
 VALIDATION_RETRY_INT_S = 10
+DNS_UPDATE_CHECK_ENABLED = True
+
+try:
+    import dns.resolver
+    import dns.name
+    import dns.query
+    import dns.message
+    import dns.exception
+except ImportError:
+    VALIDATION_TIMEOUT_S = 180
+    logger.warning("certbot-dns-opteamax requires dnspython module to be installed for live dns update checks. falling back to static timeout of %d seconds.", VALIDATION_TIMEOUT_S)
+    DNS_UPDATE_CHECK_ENABLED = False
 
 class Authenticator(dns_common.DNSAuthenticator):
     """DNS Authenticator for Opteamax DNS
@@ -148,11 +155,16 @@ class Authenticator(dns_common.DNSAuthenticator):
             validations.append((longestMatch, validation_domain_name, validation))
             responses.append(achall.response(achall.account_key))
 
+        if not DNS_UPDATE_CHECK_ENABLED:
+            display_util.notify(f"Waiting {VALIDATION_TIMEOUT_S} seconds for DNS updates to propagate.")
+            time.sleep(VALIDATION_TIMEOUT_S)
+            return responses
+
         # verify if all updates have been propagated to all authoritative DNS servers
         validation_start_time = time.time()
         for longestMatch, validation_domain_name, validation in validations:
             ns_list = self.get_authoritative_nameservers(longestMatch)
-            display_util.notify(f"waiting for update propagation of domain '{validation_domain_name}' on nameservers: {ns_list}.")
+            display_util.notify(f"Waiting for DNS updates to propagate for domain '{validation_domain_name}' on nameservers: {ns_list}.")
             while True:
                 if self.check_txt_on_authoritative_servers(longestMatch, validation_domain_name, validation):
                     display_util.notify(f"DNS update validation succeeded for domain '{validation_domain_name}' after {int(time.time() - validation_start_time)} seconds.")
