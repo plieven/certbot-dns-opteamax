@@ -34,7 +34,7 @@ try:
     import dns.exception
 except ImportError:
     VALIDATION_TIMEOUT_S = 180
-    logger.warning("certbot-dns-opteamax requires dnspython module to be installed for live dns update checks. falling back to static timeout of %d seconds.", VALIDATION_TIMEOUT_S)
+    logger.warning(f"certbot-dns-opteamax requires dnspython module to be installed for live dns update checks. falling back to static timeout of {VALIDATION_TIMEOUT_S} seconds.")
     DNS_UPDATE_CHECK_ENABLED = False
 
 class Authenticator(dns_common.DNSAuthenticator):
@@ -47,12 +47,12 @@ class Authenticator(dns_common.DNSAuthenticator):
                    'using Opteamax for DNS).')
 
     def __init__(self, *args, **kwargs):
-        super(Authenticator, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.credentials = None
 
     @classmethod
     def add_parser_arguments(cls, add):
-        super(Authenticator, cls).add_parser_arguments(add, default_propagation_seconds = 180)
+        super().add_parser_arguments(add, default_propagation_seconds=180)
         add('credentials', help='Opteamax OXAPI credentials INI file.')
 
     def _setup_credentials(self):
@@ -69,18 +69,22 @@ class Authenticator(dns_common.DNSAuthenticator):
         return ('This plugin configures a DNS TXT record to respond to a '
                 'dns-01 challenge using the Opteamax OXAPI.')
 
-    def _call_oxapi(self, command, data):
-        logger.debug("_call_oxapi: calling %s%s with %s" % (OXAPI_URL, command, data))
-        req = Request("%s%s" % (OXAPI_URL, command))
+    def _call_oxapi(self, command: str, data: dict) -> dict:
+        url = f"{OXAPI_URL}{command}"
+        logger.debug(f"_call_oxapi: calling {url} with {data}")
+        req = Request(url)
         req.add_header('Content-Type', 'application/json')
-        res = urlopen(req, json.dumps(data).encode('utf-8'), REQUEST_TIMEOUT_S)
-        data = res.read().decode('utf-8')
-        logger.debug("_call_oxapi: response -> %s\n" % data)
-        jsonRes = json.loads(data)
-        if (type(jsonRes) is dict and jsonRes['errno'] is not None and int(jsonRes['errno']) != 0):
-            raise errors.PluginError(
-                "OXAPI returned error: {}".format(jsonRes))
-        return jsonRes
+        try:
+            with urlopen(req, json.dumps(data).encode('utf-8'), REQUEST_TIMEOUT_S) as res:
+                response_data = res.read().decode('utf-8')
+                logger.debug(f"_call_oxapi: response -> {response_data}\n")
+                json_res = json.loads(response_data)
+        except Exception as e:
+            raise errors.PluginError(f"Error communicating with OXAPI: {e}")
+
+        if isinstance(json_res, dict) and json_res.get('errno') is not None and int(json_res['errno']) != 0:
+            raise errors.PluginError(f"OXAPI returned error: {json_res}")
+        return json_res
 
     def _build_ox_auth(self):
         return {'user': self.credentials.conf("username"), 'passwd': self.credentials.conf("password")}
@@ -102,7 +106,7 @@ class Authenticator(dns_common.DNSAuthenticator):
                     domid = row['domain_id']
         if (domid == 0):
             raise errors.PluginError(
-                "Could not find OXAPI domid for certiciate domain: {}".format(domain))
+                f"Could not find OXAPI domid for certificate domain: {domain}")
         localPart = domain[0:len(domain) - len(longestMatch) - 1]
         logger.debug("_get_ox_domid: found id %d for localPart '%s' longestMatch '%s'", domid, localPart, longestMatch)
         return (domid, longestMatch, localPart)
